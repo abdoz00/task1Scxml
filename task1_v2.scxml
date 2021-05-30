@@ -1,0 +1,117 @@
+<?xml version="1.0"?>
+
+<scxml
+	xmlns="http://www.w3.org/2005/07/scxml" version="1.0"
+	
+	xmlns:injaz="http://actions.injaz.edafa.com/injaz"
+	xmlns:http="http://actions.injaz.edafa.com/http"
+	xmlns:db="http://actions.injaz.edafa.com/db"
+	xmlns:kpi="http://actions.injaz.edafa.com/kpi"
+	>
+
+
+	<datamodel>
+
+		<!-- Request Parameters -->
+		<data id="userName" expr="null"/>
+		<data id="password" expr="null"/>
+		<data id="sessionId" expr="null"/>
+
+
+		<!-- log Parameters -->
+		<data id="stateName" expr="null"/>
+		<data id="flowStartTime" expr="null"/>
+
+
+		<!-- db parameters -->
+		<data id="profileID" expr="null"/>
+		<data id="queryId" expr="null"/>
+		<data id="dbResponse" expr="null"/>
+		<data id="dbResult" expr="null"/>
+		
+		<data id="hashedPass" expr="null"/>
+		<!-- http parameters -->
+		<data id="url" expr="null"/>
+		<data id="httpResponse" expr="null"/>
+		<data id="httpResult" expr="null"/>
+		
+		<!--kpis-->
+		<data id="kpiContext" expr="'pgw.serviceflows'"/>
+		<data id="kpiSetSystem" expr="'system_counters'"/>
+
+	</datamodel>
+
+
+	<state id="IDLE">
+
+		<transition event="HttpRequest.POST">
+			<assign location="stateName" expr="'IDLE'"/>
+			<assign location="flowStartTime" expr='new ("java.util.Date").getTime()'/>
+
+			<injaz:Log logLevel="'info'" message="stateName + ' | event=' + _event.name + ', Request, requestParameters=' + _event.data" marker="'CONFIDENTIAL'"/>
+
+			<assign location="userName" expr="_event.data.get('userName')"/>
+			<assign location="password" expr="_event.data.get('password')"/>
+
+			<injaz:Hash prefix="''" data="password" response="hashedPass"/>
+
+			<raise event="internal.idle.parametersStored"/>
+
+		</transition>
+
+		<transition event="internal.idle.parametersStored" target="CHECK_AUTH"/>
+
+	</state>
+
+	<state id="CHECK_AUTH">
+
+		<onentry>
+
+			<assign location="stateName" expr="'CHECK_AUTH'"/>
+			<assign location="profileID" expr="'userProfile'"/>
+			<assign location="queryId" expr="'getUserInfo'"/>
+
+			<db:Execute profileID="profileID" response="dbResponse"></db:Execute>
+
+			<assign location="dbResult" expr="dbResponse.getResponse().getDbResponse().get(queryId).getResponseObject().getSelectedRows().get(0)"/>
+
+			<injaz:GenerateID prefix="'id'"
+			dateFormat="'yyMMddHHmmssS'" response="sessionId" />
+
+
+			<raise event="internal.check_auth.checked"/>
+		</onentry>
+
+			<transition event="internal.check_auth.checked" target="FINAL"/>
+		
+	</state>
+
+	<state id="FINAL">
+
+		<onentry>
+
+			<assign location="stateName" expr="'FINAL'"/>
+
+			<http:Respond profileID="'JSON_RESPONSE'">
+				<ResponseParams>
+					
+					<ResponseParam name="UserName" value="dbResult.get('userName')"/>
+					<ResponseParam name="password" value="dbResult.get('password')"/>
+					<ResponseParam name="sessionId" value="sessionId"/>
+					<ResponseParam name="status" value="'success'" />
+
+				</ResponseParams>
+			</http:Respond>
+
+			<assign location="flowEndTime" expr='new ("java.util.Date").getTime()'/>
+			<assign location="flowDurationTime" expr="flowEndTime - flowStartTime"/>
+
+		</onentry>
+
+	</state>
+
+
+</scxml>
+
+
+	

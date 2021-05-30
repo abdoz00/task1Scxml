@@ -1,0 +1,8 @@
+- send json body to http://localhost:8080/injaz/login
+
+{
+    "userName":"abdo",
+    "password":"1234"
+}
+
+
