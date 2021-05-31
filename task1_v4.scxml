@@ -43,20 +43,28 @@
 
 		<transition event="HttpRequest.POST">
 			<assign location="stateName" expr="'IDLE'"/>
-			<injaz:Log logLevel="'info'" message="stateName + ' | event=' + _event.name + ', Request, requestParameters=' + _event.data" marker="'CONFIDENTIAL'"/>
+			<injaz:Log logLevel="'info'" message="stateName + ' | event=' + _event.name + ', Login Request, requestParameters=' + _event.data" marker="'CONFIDENTIAL'"/>
 
-			<if cond="_event.data.containsKey('userName') and _event.data.containsKey('password')">
+			<if cond="( _event.data.containsKey('userName')
+					and _event.data.containsKey('password')
+					)">
 				<assign location="password" expr="_event.data.get('password')"/>
 				<assign location="userName" expr="_event.data.get('userName')"/>
+
+				<!-- TODO .. SHOULD BE .. Add Your Secret Key -->
 				<injaz:Hash prefix="''" data="password" response="hashedPass"/>
+
 				<raise event="internal.idle.parametersStored"/>
 
+				<!-- TODO .. SHOULD BE .. Don't write any line after the raise tag -->
 				<injaz:Log logLevel="'info'" message="stateName + ' in if condition'"/>
 			<else/>
 				<raise event="internal.idle.invalidRequestParameters"/>
 
+				<!-- TODO .. SHOULD BE .. Don't write any line after the raise tag -->
 				<assign location="status" expr="'Invalid request parameters'"/>
 
+				<!-- TODO .. MAY BE .. log level warn, also log all request parameters validation -->
 				<injaz:Log logLevel="'info'" message="stateName + ' in else condition'"/>
 			</if>
 		</transition>
@@ -67,39 +75,51 @@
 
 	</state>
 
+	<!-- TODO .. MAY BE .. Use full name -->
 	<state id="CHECK_AUTH">
 
 		<onentry>
 			<assign location="stateName" expr="'CHECK_AUTH'"/>
+
 			<assign location="profileID" expr="'userProfile'"/>
 			<assign location="queryId" expr="'getUserInfo'"/>
 
 			<db:Execute profileID="profileID" response="dbResponse">
 				<QueryParams>
+					<!-- TODO .. MAY BE .. name="userName" -->
 					<QueryParam name="$inputUserName" value="userName"/>
 				</QueryParams>
+				<!-- TODO .. MAY BE .. Default value is true -->
 				<Queries>
 						<Query id="getUserInfo" enable="true"/>
 				</Queries>
 			</db:Execute>
 
+			<!-- TODO .. MUST BE Check status before access dbResult -->
 			<assign location="dbResult" expr="dbResponse.getResponse().getDbResponse().get(queryId).getResponseObject().getSelectedRows()"/>
 
-			<injaz:Log logLevel="'info'" message="'dbResult= '+dbResult"/>
+			<!-- TODO .. MAY BE .. Where is msg? -->
+			<injaz:Log logLevel="'info'" message="'dbResult= ' + dbResult"/>
 
+			<!-- TODO .. MAY BE .. Check "dbResponse.getResponse().getDbResponse().get(queryId).getResponseObject().getSelectedRowsCount() == '1'" -->
 			<if cond="dbResult.size()>0">
 				<if cond="dbResult.get(0).get('password').equals(hashedPass)">
-					<injaz:GenerateID prefix="'id'"
-						dateFormat="'yyMMddHHmmssS'" response="sessionId" />
+					<injaz:GenerateID prefix="'id'" dateFormat="'yyMMddHHmmssS'" response="sessionId" />
+
 					<assign location="status" expr="'Success'"/>
+
+					<!-- TODO .. SHOULD BE .. Log here with info level -->
 					<raise event="internal.check_auth.checked"/>
 				<else/>
 					<assign location="status" expr="'userName or password are invalid'"/>
+
+					<!-- TODO .. SHOULD BE .. Log here with warn level -->
 					<raise event="internal.check_auth.failed"/>
 				</if>
 
 			<else/>
 				<assign location="status" expr="'userName or password are invalid'"/>
+
 				<raise event="internal.check_auth.failed"/>
 			</if>
 		</onentry>
@@ -121,6 +141,8 @@
  					<ResponseParam name="status" value="status" />
 				</ResponseParams>
 			</http:Respond>
+
+			<!-- TODO .. SHOULD BE .. Log here with info level -->
 		</onentry>
 
 	</state>
