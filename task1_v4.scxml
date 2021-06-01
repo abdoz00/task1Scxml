@@ -1,0 +1,163 @@
+<?xml version="1.0"?>
+<scxml
+	xmlns="http://www.w3.org/2005/07/scxml" version="1.0"
+	xmlns:injaz="http://actions.injaz.edafa.com/injaz"
+	xmlns:http="http://actions.injaz.edafa.com/http"
+	xmlns:db="http://actions.injaz.edafa.com/db"
+	xmlns:kpi="http://actions.injaz.edafa.com/kpi"
+>
+
+	<datamodel>
+
+		<!-- Request Parameters -->
+		<data id="userName" expr="null"/>
+		<data id="password" expr="null"/>
+		<data id="sessionId" expr="null"/>
+		<data id="status" expr="'FAIL'"/>
+
+		<data id="hashedPass" expr="null"/>
+
+		<!-- log Parameters -->
+		<data id="stateName" expr="null"/>
+
+		<!-- db parameters -->
+		<data id="profileID" expr="null"/>
+		<data id="queryId" expr="null"/>
+
+		<data id="dbResponse" expr="null"/>
+		<data id="dbResult" expr="null"/>
+
+		<!-- http parameters -->
+		<data id="url" expr="null"/>
+
+		<data id="httpResponse" expr="null"/>
+		<data id="httpResult" expr="null"/>
+
+		<!--kpis-->
+		<data id="kpiContext" expr="'login.serviceflows'"/>
+		<data id="kpiSetSystem" expr="'system_counters'"/>
+
+	</datamodel>
+
+	<state id="IDLE">
+
+		<transition event="HttpRequest.POST">
+			<assign location="stateName" expr="'IDLE'"/>
+			<injaz:Log logLevel="'info'" message="stateName + ' | event=' + _event.name + ', Login Request, requestParameters=' + _event.data" marker="'CONFIDENTIAL'"/>
+
+			<if cond="( _event.data.containsKey('userName')
+					and _event.data.containsKey('password')
+					)">
+				<assign location="password" expr="_event.data.get('password')"/>
+				<assign location="userName" expr="_event.data.get('userName')"/>
+
+				<!-- TODO .. SHOULD BE .. Add Your Secret Key -->
+				<injaz:Hash prefix="'loginID'" data="password" response="hashedPass"/>
+
+				<!-- TODO .. SHOULD BE .. Don't write any line after the raise tag -->
+				<injaz:Log logLevel="'info'" message="stateName + ' in if condition'"/>
+				<raise event="internal.idle.parametersStored"/>
+
+
+			<else/>
+				<!-- TODO .. SHOULD BE .. Don't write any line after the raise tag -->
+				<assign location="status" expr="'Invalid request parameters'"/>
+
+				<!-- TODO .. MAY BE .. log level warn, also log all request parameters validation -->
+				<injaz:Log logLevel="'warn'" message="stateName + 'msg= '+ status"/>
+				<raise event="internal.idle.invalidRequestParameters"/>
+
+
+			</if>
+		</transition>
+
+		<transition event="internal.idle.invalidRequestParameters" target="FINAL"/>
+
+		<transition event="internal.idle.parametersStored" target="CHECK_AUTHENTICATION"/>
+
+	</state>
+
+	<!-- TODO .. MAY BE .. Use full name -->
+	<state id="CHECK_AUTHENTICATION">
+
+		<onentry>
+			<assign location="stateName" expr="'CHECK_AUTHENTICATION'"/>
+
+			<assign location="profileID" expr="'userProfile'"/>
+			<assign location="queryId" expr="'getUserInfo'"/>
+
+			<db:Execute profileID="profileID" response="dbResponse">
+				<QueryParams>
+					<!-- TODO .. MAY BE .. name="userName" -->
+					<QueryParam name="$userName" value="userName"/>
+				</QueryParams>
+
+			</db:Execute>
+
+			<!-- TODO .. MUST BE Check status before access dbResult -->
+			<if cond="dbResponse.getStatus() == 'SUCCESS'">
+				
+
+			<assign location="dbResult" expr="dbResponse.getResponse().getDbResponse().get(queryId).getResponseObject().getSelectedRows()"/>
+
+			
+				<!-- TODO .. MAY BE .. Check "dbResponse.getResponse().getDbResponse().get(queryId).getResponseObject().getSelectedRowsCount() == '1'" -->
+				<if cond="dbResult.size()>0">
+
+					<injaz:Log logLevel="'info'" message="'msg= databases query success'"/>
+
+					<if cond="dbResult.get(0).get('password').equals(hashedPass)">
+						<injaz:GenerateID prefix="'id'" dateFormat="'yyMMddHHmmssS'" response="sessionId" />
+
+						<assign location="status" expr="'Success'"/>
+
+						<!-- TODO .. SHOULD BE .. Log here with info level -->
+						<raise event="internal.CHECK_AUTHENTICATION.checked"/>
+					<else/>
+						<assign location="status" expr="'userName or password are invalid'"/>
+
+						<!-- TODO .. SHOULD BE .. Log here with warn level -->
+						<raise event="internal.CHECK_AUTHENTICATION.failed"/>
+					</if>
+
+				<else/>
+					<assign location="status" expr="'userName or password are invalid'"/>
+
+					<raise event="internal.CHECK_AUTHENTICATION.failed"/>
+				</if>
+
+
+
+			<else/>
+				<injaz:Log logLevel="'error'" message="stateName + ' | event=' + _event.name + ', profileID=' + profileID + ', dbResponse=' + dbResponse + ', msg=Execute DB failed'"/>
+				<assign location="status" expr="'problem with the database'"/>
+				<raise event="internal.CHECK_AUTHENTICATION.failed"/>
+				
+			</if>
+
+		</onentry>
+
+			<transition event="internal.CHECK_AUTHENTICATION.checked" target="FINAL"/>
+
+			<transition event="internal.CHECK_AUTHENTICATION.failed" target="FINAL"/>
+
+	</state>
+
+	<state id="FINAL">
+
+		<onentry>
+			<assign location="stateName" expr="'FINAL'"/>
+
+			<http:Respond profileID="'JSON_RESPONSE'">
+				<ResponseParams>
+					<ResponseParam name="sessionId" value="sessionId"/>
+ 					<ResponseParam name="status" value="status" />
+				</ResponseParams>
+			</http:Respond>
+
+			<!-- TODO .. SHOULD BE .. Log here with info level -->
+		</onentry>
+
+	</state>
+
+</scxml>
